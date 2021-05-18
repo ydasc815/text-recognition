@@ -8,6 +8,9 @@ import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewTreeObserver
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.camera.core.*
@@ -19,6 +22,7 @@ import androidx.lifecycle.MutableLiveData
 import com.aditya.text_recognition.databinding.ActivityCameraBinding
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
+import kotlinx.android.synthetic.main.activity_camera.*
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -104,6 +108,7 @@ class CameraActivity : AppCompatActivity(), TextRecognizerListener {
         )
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun startCamera() {
         listener = this
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
@@ -121,6 +126,36 @@ class CameraActivity : AppCompatActivity(), TextRecognizerListener {
                 cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
             } catch(exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
+            }
+            val camera = cameraProvider.bindToLifecycle(
+                this@CameraActivity, cameraSelector, viewFinder.viewPort //this is a PreviewView
+            )
+            binding.viewFinder.afterMeasured {
+                binding.viewFinder.setOnTouchListener { _, event ->
+                    return@setOnTouchListener when (event.action) {
+                        MotionEvent.ACTION_DOWN -> { true }
+                        MotionEvent.ACTION_UP -> {
+                            val factory: MeteringPointFactory = SurfaceOrientedMeteringPointFactory(
+                                binding.viewFinder.width.toFloat(), binding.viewFinder.height.toFloat()
+                            )
+                            val autoFocusPoint = factory.createPoint(event.x, event.y)
+                            try {
+                                camera.cameraControl.startFocusAndMetering(
+                                    FocusMeteringAction.Builder(
+                                        autoFocusPoint,
+                                        FocusMeteringAction.FLAG_AF
+                                    ).apply {
+                                        disableAutoCancel()
+                                    }.build()
+                                )
+                            } catch (e: CameraInfoUnavailableException) {
+                                Log.d("ERROR", "cannot access camera", e)
+                            }
+                            true
+                        }
+                        else -> false
+                    }
+                }
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -152,5 +187,16 @@ class CameraActivity : AppCompatActivity(), TextRecognizerListener {
 
     override fun text(str: String) {
         Toast.makeText(this, str, Toast.LENGTH_LONG).show()
+    }
+
+    private inline fun View.afterMeasured(crossinline block: () -> Unit) {
+        viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                if (measuredWidth > 0 && measuredHeight > 0) {
+                    viewTreeObserver.removeOnGlobalLayoutListener(this)
+                    block()
+                }
+            }
+        })
     }
 }
