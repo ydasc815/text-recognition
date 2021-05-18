@@ -1,6 +1,7 @@
 package com.aditya.text_recognition
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -9,26 +10,29 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
+import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
+import androidx.lifecycle.MutableLiveData
 import com.aditya.text_recognition.databinding.ActivityCameraBinding
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
 import java.io.File
+import java.io.IOException
+import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class CameraActivity : AppCompatActivity() {
+class CameraActivity : AppCompatActivity(), TextRecognizerListener {
     private lateinit var binding: ActivityCameraBinding
     private var imageCapture: ImageCapture? = null
     private lateinit var outputDirectory: File
     private lateinit var cameraExecutor: ExecutorService
+    private lateinit var listener: TextRecognizerListener
     @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,6 +75,21 @@ class CameraActivity : AppCompatActivity() {
             outputOptions, ContextCompat.getMainExecutor(this), object: ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                     val savedUri = Uri.fromFile(photoFile)
+                    val image: InputImage
+                    try {
+                        image = InputImage.fromFilePath(this@CameraActivity, savedUri)
+                        val recognizer = TextRecognition.getClient()
+                        val result = recognizer.process(image)
+                            .addOnSuccessListener {
+                                listener.text(it.text)
+                                Log.d(TAG, "text: ${it.text}")
+                            }
+                            .addOnFailureListener {
+                                Log.d(TAG, "Text recognition failed with exception: $it")
+                            }
+                    } catch(e: IOException) {
+                        e.printStackTrace()
+                    }
                     val msg = "Photo Captured ! Saved at location : $savedUri"
                     Toast.makeText(this@CameraActivity, msg, Toast.LENGTH_SHORT).show()
                     Log.d(TAG, msg)
@@ -86,6 +105,7 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun startCamera() {
+        listener = this
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener(Runnable{
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
@@ -128,5 +148,9 @@ class CameraActivity : AppCompatActivity() {
         private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
+    }
+
+    override fun text(str: String) {
+        Toast.makeText(this, str, Toast.LENGTH_LONG).show()
     }
 }
