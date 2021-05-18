@@ -108,7 +108,7 @@ class CameraActivity : AppCompatActivity(), TextRecognizerListener {
         )
     }
 
-    @SuppressLint("ClickableViewAccessibility")
+    @SuppressLint("ClickableViewAccessibility", "RestrictedApi", "UnsafeOptInUsageError")
     private fun startCamera() {
         listener = this
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
