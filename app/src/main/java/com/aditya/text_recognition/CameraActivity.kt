@@ -21,6 +21,8 @@ import androidx.databinding.DataBindingUtil
 import androidx.lifecycle.MutableLiveData
 import com.aditya.text_recognition.databinding.ActivityCameraBinding
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.google.mlkit.vision.text.TextRecognition
 import kotlinx.android.synthetic.main.activity_camera.*
 import java.io.File
@@ -30,6 +32,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.collections.ArrayList
 
 class CameraActivity : AppCompatActivity(), TextRecognizerListener {
     private lateinit var binding: ActivityCameraBinding
@@ -90,6 +93,18 @@ class CameraActivity : AppCompatActivity(), TextRecognizerListener {
                             }
                             .addOnFailureListener {
                                 Log.d(TAG, "Text recognition failed with exception: $it")
+                            }
+                        val labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
+                        labeler.process(image)
+                            .addOnSuccessListener {
+                                val list : MutableList<String> = ArrayList()
+                                for(i in 0 until it.size) {
+                                    list.add(it[i].text)
+                                }
+                                listener.text("Object list : $list")
+                            }
+                            .addOnFailureListener {
+                                Log.d(TAG, "Object detection failed with exception: $it")
                             }
                     } catch(e: IOException) {
                         e.printStackTrace()
